@@ -8,7 +8,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
-#define CR_LF "\r\n"
+#define CR_LF "\x0D\x0A"
 #define DEBUG_URL_MSG "/gopher/wbgopher\x0D\x0A"
 
 struct gopher_client_tk {
