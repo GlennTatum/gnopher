@@ -12,87 +12,50 @@
 #define DEBUG_URL_MSG "/gopher/wbgopher\x0D\x0A"
 
 struct gopher_client_tk {
-  char* hostname;
-  char* pathname;
+    char* hostname;
+    char type;
+    char* path;
 };
 
 void free_gopher_client(struct gopher_client_tk *gc) {
-  free(gc->hostname);
-  free(gc->pathname);
-  free(gc);
+    free(gc->hostname);
+    free(gc);
 }
 
-int gopher_uri(char* resource, int resource_size, char* dst) {
-  /*  
-  in: gopher.floodgap.com/gopher/wbgopher
-  out: length of path
-  */
-  char buf[resource_size];
+int gopher_send_cmd(struct gopher_client_tk *gc, int s) {
+    int msg_n = (sizeof(char)*strlen(gc->path))+(sizeof(char)*strlen(CR_LF));
+    char msg_buf[msg_n];
+    
+    sprintf(msg_buf, "%s%s", gc->path, CR_LF);
 
-  // first occurence of '/'
-  int offset;
-  for (int i = 0; i < resource_size; i++)
-  {
-    if (resource[i] == '/') {
-      offset = i;
-      break;
-    }
-  }
+    /*send network message onf socket (s)*/
 
-  // copy the uri into the buffer /gopher/wbgopher -> buf
-  int j;
-  for (int i = offset; i < resource_size; i++) {
-    buf[j] = resource[i];
-    j++;
-  }
+    write(s, msg_buf, sizeof(char)*strlen(msg_buf));
 
-  // compute the size of the uri
-  int r_uri_size;
-  for (int i = 0; i < (int)sizeof(buf); i++) {
-    if (buf[i] == '\0') {
-      r_uri_size = i;
-      break;
-    }
-  }
-  memcpy(dst, buf, r_uri_size);
-
-  return r_uri_size;
+    return msg_n;
 }
 
-struct gopher_client_tk* build_gopher_client(char* resource) {
+struct gopher_client_tk* read_url(char *msg) {
 
-  char dst[strlen(resource)];
-  int uri_size = gopher_uri(resource, strlen(resource), dst);
+    int fqdn_loc = (int)(strchr(msg, '/') - msg); // fqdn trails up to n characters
+    int gh_type_loc = fqdn_loc + sizeof(char); // type offset
+    int path_loc = gh_type_loc + sizeof(char); // path offset
 
-  char msg_buf[uri_size + sizeof(CR_LF)];
+    char fqdn[fqdn_loc];
+    strncpy(fqdn, msg, fqdn_loc);
 
-  char uri[uri_size];
-  memcpy(uri, dst, uri_size);
-  sprintf(msg_buf, "%s%s", uri, CR_LF);
+    char type = msg[gh_type_loc];
 
-  // first occurence of '/'
-  int offset;
-  for (int i = 0; i < (int)strlen(resource); i++)
-  {
-    if (resource[i] == '/') {
-      offset = i;
-      break;
-    }
-  }
-  char hostname[offset];
+    char *path = msg + (sizeof(char)*path_loc);
 
-  memcpy(hostname, resource, offset);
+    struct gopher_client_tk *gc;
+    gc = malloc(sizeof(struct gopher_client_tk));
+    gc->hostname = malloc(sizeof(char)*strlen(fqdn));
+    strcpy(gc->hostname, fqdn);
+    gc->type = type;
+    gc->path = path;
 
-  struct gopher_client_tk *gc;
-  gc = malloc(sizeof(struct gopher_client_tk));
-
-  gc->hostname = malloc(strlen(hostname)*sizeof(hostname));
-  strcpy(gc->hostname, hostname);
-  gc->pathname = malloc(strlen(msg_buf)*sizeof(msg_buf));
-  strcpy(gc->pathname, msg_buf);
-
-  return gc;
-
+    return gc;
 }
 
 int main(int argc, char **argv) {
@@ -103,7 +66,7 @@ int main(int argc, char **argv) {
 
   char *gopher_fqdn = argv[1];
 
-  struct gopher_client_tk *gc = build_gopher_client(gopher_fqdn);
+  struct gopher_client_tk *gc = read_url(gopher_fqdn);
 
   struct hostent *ha;
 
@@ -131,7 +94,7 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  write(s, gc->pathname, sizeof(char)*strlen(gc->pathname)); // Send the URL
+  gopher_send_cmd(gc, s);
 
   while ((bytes = read(s, buffer, BUFSIZ)) > 0) {
     // write the response to standard out (1)
