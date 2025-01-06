@@ -76,10 +76,13 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  // gets a list of a hosts ip addresses
-  // refer to inet_aton(ip_addr, &(struct in_addr)) for
-  // turning a ipv4 network address into network address order
+  // FIXME switch to getaddrinfo() and delegate to function that retries for potential IPv4 Addresses
+  printf("%s\n", gc->hostname);
   ha = gethostbyname(gc->hostname);
+  if (ha == NULL) {
+    printf("could not find ip address\n");
+    return 0;
+  }
 
   sa.sin_family = AF_INET;
   sa.sin_port = htons(70); // Gopher communicates on port 70
